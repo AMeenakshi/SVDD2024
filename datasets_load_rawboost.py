@@ -48,31 +48,49 @@ class SVDD2024(Dataset):
         return len(self.file_list)
 
     def __getitem__(self, index):            
-        if self.partition == "test":
-            file_name = self.file_list[index].strip()
-            label = 0  # dummy label. Not used for test set.
-        else:
-            file = self.file_list[index]
-            file_name = file.split(" ")[2].strip()
-            bonafide_or_spoof = file.split(" ")[-1].strip()
-            label = 1 if bonafide_or_spoof == "bonafide" else 0
-
-        # Append the .flac extension to the file name
-        file_path = os.path.join(self.base_dir, file_name + ".flac")
-        if not os.path.exists(file_path):
-            print(f"File not found: {file_path}")
-            # Optionally handle the missing file case, e.g., return a dummy sample
-            return torch.zeros(self.max_len), label, file_name
-
         try:
-            x, _ = librosa.load(file_path, sr=16000, mono=True)
-            if self.partition == "train":
-                x = process_Rawboost_feature(x, 16000, self.args, self.algo)
-                x = pad_random(x, self.max_len)
-            elif self.partition == "dev" or self.partition == "test":
-                pass
+            if self.partition == "test":
+                file_name = self.file_list[index].strip()
+                label = 0  # dummy label. Not used for test set.
             else:
-                raise ValueError 
+                file = self.file_list[index]
+                file_name = file.split(" ")[2].strip()
+                bonafide_or_spoof = file.split(" ")[-1].strip()
+                label = 1 if bonafide_or_spoof == "bonafide" else 0
+
+            # Append the .flac extension to the file name
+            file_path = os.path.join(self.base_dir, file_name + ".flac")
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File not found: {file_path}")
+
+            # Load and process audio
+            x, sr = librosa.load(file_path, sr=16000, mono=True)
+            
+            # Apply processing based on partition
+            if self.partition == "train":
+                # Apply data augmentation for training
+                x = process_Rawboost_feature(x, sr, self.args, self.algo)
+                x = pad_random(x, self.max_len)
+            else:  # dev or test
+                # For dev/test, just pad or trim to max_len
+                if len(x) > self.max_len:
+                    # Randomly select a segment of max_len
+                    start = np.random.randint(0, len(x) - self.max_len)
+                    x = x[start:start + self.max_len]
+                else:
+                    # Pad with zeros if shorter than max_len
+                    x = np.pad(x, (0, self.max_len - len(x)), mode='constant')
+
+            # Convert to PyTorch tensor with proper dtype
+            x = torch.tensor(x, dtype=torch.float32)
+            label = torch.tensor(label, dtype=torch.long)
+            
+            return x, label, file_name
+
+        except Exception as e:
+            print(f"Error processing {file_name if 'file_name' in locals() else 'unknown file'}: {str(e)}")
+            # Return a zero tensor with proper shape in case of error
+            return torch.zeros(self.max_len), torch.tensor(0, dtype=torch.long), file_name
             # Convert to PyTorch tensor
             x_inp = torch.tensor(x, dtype=torch.float32)
             
@@ -86,17 +104,71 @@ class SVDD2024(Dataset):
 
 #--------------RawBoost data augmentation algorithms---------------------------##
 
-def process_Rawboost_feature(feature, sr,args,algo):
+def process_Rawboost_feature(feature, sr, args, algo):
     
     # Data process by Convolutive noise (1st algo)
-    if algo==1:
-
-        feature =LnL_convolutive_noise(feature,args.N_f,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,args.minCoeff,args.maxCoeff,args.minG,args.maxG,args.minBiasLinNonLin,args.maxBiasLinNonLin,sr)
+    if algo == 1:
+        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                      args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                      args.minG, args.maxG, args.minBiasLinNonLin,
+                                      args.maxBiasLinNonLin, sr)
                             
     # Data process by Impulsive noise (2nd algo)
-    elif algo==2:
+    elif algo == 2:
+        feature = ISD_additive_noise(feature, args.P, args.g_sd)
         
-        feature=ISD_additive_noise(feature, args.P, args.g_sd)
+    # Data process by Stationary noise (3rd algo)
+    elif algo == 3:
+        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                    args.minF, args.maxF, args.minBW, args.maxBW,
+                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
+    
+    # Data process by all three algo in series (4th algo)
+    elif algo == 4:
+        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                       args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                       args.minG, args.maxG, args.minBiasLinNonLin,
+                                       args.maxBiasLinNonLin, sr)
+        feature = ISD_additive_noise(feature, args.P, args.g_sd)
+        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                    args.minF, args.maxF, args.minBW, args.maxBW,
+                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
+    
+    # Data process by 1st and 2nd algo in series (5th algo)
+    elif algo == 5:
+        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                       args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                       args.minG, args.maxG, args.minBiasLinNonLin,
+                                       args.maxBiasLinNonLin, sr)
+        feature = ISD_additive_noise(feature, args.P, args.g_sd)
+    
+    # Data process by 1st and 3rd algo in series (6th algo)
+    elif algo == 6:
+        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                       args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                       args.minG, args.maxG, args.minBiasLinNonLin,
+                                       args.maxBiasLinNonLin, sr)
+        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                    args.minF, args.maxF, args.minBW, args.maxBW,
+                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
+    
+    # Data process by 2nd and 3rd algo in series (7th algo)
+    elif algo == 7:
+        feature = ISD_additive_noise(feature, args.P, args.g_sd)
+        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                    args.minF, args.maxF, args.minBW, args.maxBW,
+                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
+    
+    # Data process by 1st and 2nd algo in parallel (8th algo)
+    elif algo == 8:
+        feature1 = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                        args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                        args.minG, args.maxG, args.minBiasLinNonLin,
+                                        args.maxBiasLinNonLin, sr)
+        feature2 = ISD_additive_noise(feature, args.P, args.g_sd)
+        feature = (feature1 + feature2) / 2
+    
+    return feature
                             
     # Data process by coloured additive noise (3rd algo)
     elif algo==3:
