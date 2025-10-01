@@ -12,10 +12,12 @@ def pad_random(x: np.ndarray, max_len: int = 64000):
     if x_len > max_len:
         stt = np.random.randint(x_len - max_len)
         return x[stt:stt + max_len]
-
-    num_repeats = int(max_len / x_len) + 1
-    padded_x = np.tile(x, (num_repeats))
-    return pad_random(padded_x, max_len)
+    elif x_len == max_len:
+        return x
+    else:
+        num_repeats = int(max_len / x_len) + 1
+        padded_x = np.tile(x, (num_repeats))[:max_len]
+        return padded_x
 
 class SVDD2024(Dataset):
     """
@@ -91,135 +93,93 @@ class SVDD2024(Dataset):
             print(f"Error processing {file_name if 'file_name' in locals() else 'unknown file'}: {str(e)}")
             # Return a zero tensor with proper shape in case of error
             return torch.zeros(self.max_len), torch.tensor(0, dtype=torch.long), file_name
-            # Convert to PyTorch tensor
-            x_inp = torch.tensor(x, dtype=torch.float32)
-            
-            # file_name is used for generating the score file for submission
-            return x_inp, label, file_name
-        except Exception as e:
-            print(f"Error loading {file_name}: {str(e)}")
-            raise RuntimeError(f"Error loading {file_name}: {str(e)}")
 
 
 
 #--------------RawBoost data augmentation algorithms---------------------------##
 
 def process_Rawboost_feature(feature, sr, args, algo):
+    """Process audio feature with RawBoost augmentation algorithms.
     
-    # Data process by Convolutive noise (1st algo)
-    if algo == 1:
-        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
-                                      args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
-                                      args.minG, args.maxG, args.minBiasLinNonLin,
-                                      args.maxBiasLinNonLin, sr)
-                            
-    # Data process by Impulsive noise (2nd algo)
-    elif algo == 2:
-        feature = ISD_additive_noise(feature, args.P, args.g_sd)
+    Args:
+        feature: Input audio feature
+        sr: Sample rate
+        args: Arguments containing augmentation parameters
+        algo: Algorithm selection (1-8)
         
-    # Data process by Stationary noise (3rd algo)
-    elif algo == 3:
-        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
-                                    args.minF, args.maxF, args.minBW, args.maxBW,
-                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
-    
-    # Data process by all three algo in series (4th algo)
-    elif algo == 4:
-        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
-                                       args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
-                                       args.minG, args.maxG, args.minBiasLinNonLin,
-                                       args.maxBiasLinNonLin, sr)
-        feature = ISD_additive_noise(feature, args.P, args.g_sd)
-        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
-                                    args.minF, args.maxF, args.minBW, args.maxBW,
-                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
-    
-    # Data process by 1st and 2nd algo in series (5th algo)
-    elif algo == 5:
-        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
-                                       args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
-                                       args.minG, args.maxG, args.minBiasLinNonLin,
-                                       args.maxBiasLinNonLin, sr)
-        feature = ISD_additive_noise(feature, args.P, args.g_sd)
-    
-    # Data process by 1st and 3rd algo in series (6th algo)
-    elif algo == 6:
-        feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
-                                       args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
-                                       args.minG, args.maxG, args.minBiasLinNonLin,
-                                       args.maxBiasLinNonLin, sr)
-        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
-                                    args.minF, args.maxF, args.minBW, args.maxBW,
-                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
-    
-    # Data process by 2nd and 3rd algo in series (7th algo)
-    elif algo == 7:
-        feature = ISD_additive_noise(feature, args.P, args.g_sd)
-        feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
-                                    args.minF, args.maxF, args.minBW, args.maxBW,
-                                    args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
-    
-    # Data process by 1st and 2nd algo in parallel (8th algo)
-    elif algo == 8:
-        feature1 = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
-                                        args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
-                                        args.minG, args.maxG, args.minBiasLinNonLin,
-                                        args.maxBiasLinNonLin, sr)
-        feature2 = ISD_additive_noise(feature, args.P, args.g_sd)
-        feature = (feature1 + feature2) / 2
-    
-    return feature
-                            
-    # Data process by coloured additive noise (3rd algo)
-    elif algo==3:
+    Returns:
+        Processed audio feature
+    """
+    try:
+        # Data process by Convolutive noise (1st algo)
+        if algo == 1:
+            feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                          args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                          args.minG, args.maxG, args.minBiasLinNonLin,
+                                          args.maxBiasLinNonLin, sr)
+                                
+        # Data process by Impulsive noise (2nd algo)
+        elif algo == 2:
+            feature = ISD_additive_noise(feature, args.P, args.g_sd)
+            
+        # Data process by Stationary noise (3rd algo)
+        elif algo == 3:
+            feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                        args.minF, args.maxF, args.minBW, args.maxBW,
+                                        args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
         
-        feature=SSI_additive_noise(feature,args.SNRmin,args.SNRmax,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,args.minCoeff,args.maxCoeff,args.minG,args.maxG,sr)
-    
-    # Data process by all 3 algo. together in series (1+2+3)
-    elif algo==4:
+        # Data process by all three algo in series (4th algo)
+        elif algo == 4:
+            feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                           args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                           args.minG, args.maxG, args.minBiasLinNonLin,
+                                           args.maxBiasLinNonLin, sr)
+            feature = ISD_additive_noise(feature, args.P, args.g_sd)
+            feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                        args.minF, args.maxF, args.minBW, args.maxBW,
+                                        args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
         
-        feature =LnL_convolutive_noise(feature,args.N_f,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,
-                 args.minCoeff,args.maxCoeff,args.minG,args.maxG,args.minBiasLinNonLin,args.maxBiasLinNonLin,sr)                         
-        feature=ISD_additive_noise(feature, args.P, args.g_sd)  
-        feature=SSI_additive_noise(feature,args.SNRmin,args.SNRmax,args.nBands,args.minF,
-                args.maxF,args.minBW,args.maxBW,args.minCoeff,args.maxCoeff,args.minG,args.maxG,sr)                 
-
-    # Data process by 1st two algo. together in series (1+2)
-    elif algo==5:
+        # Data process by 1st and 2nd algo in series (5th algo)
+        elif algo == 5:
+            feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                           args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                           args.minG, args.maxG, args.minBiasLinNonLin,
+                                           args.maxBiasLinNonLin, sr)
+            feature = ISD_additive_noise(feature, args.P, args.g_sd)
         
-        feature =LnL_convolutive_noise(feature,args.N_f,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,
-                 args.minCoeff,args.maxCoeff,args.minG,args.maxG,args.minBiasLinNonLin,args.maxBiasLinNonLin,sr)                         
-        feature=ISD_additive_noise(feature, args.P, args.g_sd)                
-                            
-
-    # Data process by 1st and 3rd algo. together in series (1+3)
-    elif algo==6:  
+        # Data process by 1st and 3rd algo in series (6th algo)
+        elif algo == 6:
+            feature = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                           args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                           args.minG, args.maxG, args.minBiasLinNonLin,
+                                           args.maxBiasLinNonLin, sr)
+            feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                        args.minF, args.maxF, args.minBW, args.maxBW,
+                                        args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
         
-        feature =LnL_convolutive_noise(feature,args.N_f,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,
-                 args.minCoeff,args.maxCoeff,args.minG,args.maxG,args.minBiasLinNonLin,args.maxBiasLinNonLin,sr)                         
-        feature=SSI_additive_noise(feature,args.SNRmin,args.SNRmax,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,args.minCoeff,args.maxCoeff,args.minG,args.maxG,sr) 
+        # Data process by 2nd and 3rd algo in series (7th algo)
+        elif algo == 7:
+            feature = ISD_additive_noise(feature, args.P, args.g_sd)
+            feature = SSI_additive_noise(feature, args.SNRmin, args.SNRmax, args.nBands,
+                                        args.minF, args.maxF, args.minBW, args.maxBW,
+                                        args.minCoeff, args.maxCoeff, args.minG, args.maxG, sr)
+        
+        # Data process by 1st and 2nd algo in parallel (8th algo)
+        elif algo == 8:
+            feature1 = LnL_convolutive_noise(feature, args.N_f, args.nBands, args.minF, args.maxF,
+                                            args.minBW, args.maxBW, args.minCoeff, args.maxCoeff,
+                                            args.minG, args.maxG, args.minBiasLinNonLin,
+                                            args.maxBiasLinNonLin, sr)
+            feature2 = ISD_additive_noise(feature, args.P, args.g_sd)
+            feature = (feature1 + feature2) / 2
+        
+        return feature
+        
+    except Exception as e:
+        print(f"Error in RawBoost processing: {str(e)}")
+        return feature  # Return original feature if processing fails
 
     # Data process by 2nd and 3rd algo. together in series (2+3)
-    elif algo==7: 
-        
-        feature=ISD_additive_noise(feature, args.P, args.g_sd)
-        feature=SSI_additive_noise(feature,args.SNRmin,args.SNRmax,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,args.minCoeff,args.maxCoeff,args.minG,args.maxG,sr) 
-   
-    # Data process by 1st two algo. together in Parallel (1||2)
-    elif algo==8:
-        
-        feature1 =LnL_convolutive_noise(feature,args.N_f,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,
-                 args.minCoeff,args.maxCoeff,args.minG,args.maxG,args.minBiasLinNonLin,args.maxBiasLinNonLin,sr)                         
-        feature2=ISD_additive_noise(feature, args.P, args.g_sd)
 
-        feature_para=feature1+feature2
-        feature=normWav(feature_para,0)  #normalized resultant waveform
- 
-    # original data without Rawboost processing           
-    else:
-        
-        feature=feature
-    
-    return feature
     # return torch.tensor(feature, dtype=torch.float32)
 
