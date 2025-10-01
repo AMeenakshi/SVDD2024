@@ -41,7 +41,9 @@ def main(args):
     # Create the dataset
     path = args.base_dir
     train_dataset = SVDD2024(path, partition="train",args=args, algo=args.algo)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=seed_worker)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
+                          num_workers=args.num_workers, worker_init_fn=seed_worker,
+                          pin_memory=args.pin_memory)
     
     dev_dataset = SVDD2024(path, partition="dev",args=args, algo=args.algo)
     dev_loader = DataLoader(dev_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=seed_worker)
@@ -185,7 +187,20 @@ if __name__ == "__main__":
     
     ##===================================================Rawboost data augmentation ======================================================================#
     
-
+    # CUDA and training specific parameters
+    parser.add_argument('--gpu', type=int, default=0,
+                    help='GPU id to use. Default is 0')
+    parser.add_argument('--num_workers', type=int, default=4,
+                    help='Number of workers for data loading')
+    parser.add_argument('--pin_memory', action='store_true',
+                    help='Pin memory for faster GPU transfer')
+    parser.add_argument('--cudnn_benchmark', action='store_true',
+                    help='Enable cudnn benchmark for faster training')
     
     args = parser.parse_args()
+    
+    # Set CUDA specific settings
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = args.cudnn_benchmark
+        torch.backends.cuda.matmul.allow_tf32 = True  # Allow TF32 on Ampere
     main(args)

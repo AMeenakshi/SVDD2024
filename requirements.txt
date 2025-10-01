@@ -1,2 +1,15 @@
-torch
+torch>=2.0.0
+torchaudio
+torch>=2.0.0
+torchaudio>=2.0.0
 s3prl
+numpy
+scipy
+tqdm
+tensorboard
+scikit-learn
+ipdb
+numpy
+tqdm
+tensorboard
+scikit-learn
