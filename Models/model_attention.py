@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from models.backend import AASIST
+from Models.models.backend import AASIST
 from s3prl import hub
 
 import sys
