@@ -1,0 +1,55 @@
+# Requirements for SVDD2024 Single GPU Training with CUDA 12.8
+# Optimized for single GPU performance without distributed training overhead
+
+# Core PyTorch with CUDA 12.8 support (single GPU optimized)
+# Install PyTorch separately with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# OR use conda: conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+torch>=2.1.0,<3.0.0
+torchvision>=0.16.0,<1.0.0
+torchaudio>=2.1.0,<3.0.0
+
+# Core scientific computing
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0,<2.0.0
+
+# Machine learning utilities
+scikit-learn>=1.3.0,<2.0.0
+
+# Audio processing (essential for SVDD2024)
+librosa>=0.10.0,<1.0.0
+soundfile>=0.12.0,<1.0.0
+
+# Self-supervised learning models (required for s3prl)
+s3prl>=0.4.0
+
+# Training utilities
+tqdm>=4.65.0
+tensorboard>=2.14.0
+pandas>=2.0.0,<3.0.0
+
+# Visualization
+matplotlib>=3.7.0,<4.0.0
+
+# Development and debugging
+ipdb>=0.13.0
+
+# Performance monitoring (single GPU)
+psutil>=5.9.0
+gpustat>=1.1.0
+
+# Configuration utilities
+PyYAML>=6.0
+
+# Optional: Mixed precision training (included in PyTorch 2.1+)
+# No additional packages needed for AMP
+
+# Optional: Weights & Biases for experiment tracking
+# wandb>=0.15.0
+
+# Optional: MLflow for experiment tracking  
+# mlflow>=2.5.0
+
+# Note: Distributed training packages are NOT included:
+# - No torch.distributed optimization packages
+# - No NCCL-specific utilities
+# - No multi-node communication libraries
